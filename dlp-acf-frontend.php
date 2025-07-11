@@ -17,60 +17,67 @@ if ( ! defined( 'WPINC' ) ) {
 }
 
 /**
- * Enqueue ACF scripts and styles, and our custom script.
+ * Enqueue ACF scripts and styles.
  */
 function dlp_acf_enqueue_scripts() {
     if ( is_singular() && has_shortcode( get_the_content(), 'dlp_submission_form' ) ) {
         // Enqueue ACF's scripts and styles.
-        acf_form_head();
-
-        // Enqueue our custom script to prevent ACF from hijacking the form submission.
-        wp_enqueue_script(
-            'dlp-acf-frontend',
-            plugin_dir_url( __FILE__ ) . 'assets/js/dlp-acf-frontend.js',
-            ['jquery'],
-            '1.0.0',
-            true
-        );
+        acf_enqueue_scripts();
     }
 }
 add_action( 'wp_enqueue_scripts', 'dlp_acf_enqueue_scripts' );
 
-
 /**
  * Display the 'related_committee' ACF field on the submission form.
- * We use acf_form() to ensure the field renders correctly with its associated JS.
  */
 function dlp_acf_display_form_field() {
-    // Configuration for the ACF form.
-    $options = [
-        'post_id' => 'new_post',
-        'new_post' => [
-            'post_type'   => 'dlp_document',
-            'post_status' => 'publish'
-        ],
-        // Specify the field to display by its name.
-        'fields' => ['related_committee'],
-        // We don't want ACF to render the <form> tag or submit button.
-        'form' => false,
-        'submit_value' => false,
-    ];
+    // Get the field object for 'related_committee'.
+    $field = acf_get_field( 'related_committee' );
 
-    // Output the ACF form, wrapped for JS targeting.
-    echo '<div id="dlp-acf-fields-wrapper" style="display:none;">';
-    acf_form( $options );
-    echo '</div>';
+    // Ensure the field exists.
+    if ( ! $field ) {
+        return;
+    }
+
+    // Render the field wrapper. This will output the HTML for the field.
+    acf_render_field_wrap( $field );
 }
 add_action( 'dlp_before_submission_form', 'dlp_acf_display_form_field' );
 
 /**
  * Save the ACF field data when the main form is submitted.
  *
- * @param \Barn2\Plugin\Document_Library_Pro\Document $document The document object that was just created.
+ * This function is hooked into the `dlp_document_submitted` action, which is
+ * triggered by Document Library Pro after a document has been successfully created.
+ *
+ * @param int|\Barn2\Plugin\Document_Library_Pro\Document $document The ID of the new document or the Document object.
+ */
+/**
+ * Save the ACF field data when the main form is submitted.
+ *
+ * This function is hooked into the `save_post_dlp_document` action, which is
+ * triggered by Document Library Pro after a document has been successfully created.
+ *
+ * @param int $document_id The ID of the new document.
  */
 function dlp_acf_save_form_field( $document_id ) {
-    if ( function_exists( 'acf_save_post' ) && ! empty( $_POST['acf'] ) ) {
-        acf_save_post( $document_id );
+    // Bail out if there's no ACF data for our field key.
+    if ( ! isset( $_POST['acf']['field_684b598f4cb23'] ) ) {
+        return;
     }
+
+    // Get the post ID.
+    $post_id = $document_id;
+
+    // Ensure we have a valid post ID.
+    if ( ! $post_id ) {
+        return;
+    }
+
+    // Get the value of the 'related_committee' field from the submitted data using its field key.
+    $field_value = $_POST['acf']['field_684b598f4cb23'];
+
+    // Save the ACF field data using update_post_meta().
+    update_post_meta( $post_id, 'related_committee', $field_value );
 }
 add_action( 'save_post_dlp_document', 'dlp_acf_save_form_field' );
