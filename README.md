@@ -4,7 +4,7 @@ A WordPress plugin to integrate Advanced Custom Fields (ACF) with the Document L
 
 ## Description
 
-This plugin allows you to add custom ACF fields to the frontend submission form for Document Library Pro. It currently adds a "Related Committee" field, enabling users to associate documents with a specific committee upon submission.
+This plugin allows you to add custom ACF fields to the frontend submission form for Document Library Pro. It currently adds fields such as "Related Committee", enabling users to associate documents with a specific committee upon submission.
 
 ## Requirements
 
@@ -28,4 +28,4 @@ This plugin requires the following plugins to be installed and activated:
 
 ## Usage
 
-After installation and activation, the "Related Committee" field will automatically be added to your Document Library Pro submission form.
+Assign ACF fields to the document post type. After installation and activation, the ACF fields such as "Related Committee" will automatically be added to your Document Library Pro submission form.
