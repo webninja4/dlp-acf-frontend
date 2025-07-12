@@ -81,3 +81,24 @@ function dlp_acf_save_form_field( $document_id ) {
     update_field( 'field_684b598f4cb23', $field_value, $post_id );
 }
 add_action( 'save_post_dlp_document', 'dlp_acf_save_form_field' );
+
+/**
+ * Change form field labels.
+ *
+ * @param string $translated_text The translated text.
+ * @param string $text            The original text.
+ * @param string $domain          The text domain.
+ * @return string The modified translated text.
+ */
+function dlp_acf_change_form_labels( $translated_text, $text, $domain ) {
+    if ( ! is_admin() ) {
+        switch ( $text ) {
+            case 'Excerpt':
+                return 'Brief Summary (10-15 words)';
+            case 'Content':
+                return 'Long Description';
+        }
+    }
+    return $translated_text;
+}
+add_filter( 'gettext', 'dlp_acf_change_form_labels', 20, 3 );
