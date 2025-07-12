@@ -77,7 +77,7 @@ function dlp_acf_save_form_field( $document_id ) {
     // Get the value of the 'related_committee' field from the submitted data using its field key.
     $field_value = $_POST['acf']['field_684b598f4cb23'];
 
-    // Save the ACF field data using update_post_meta().
-    update_post_meta( $post_id, 'related_committee', $field_value );
+    // Save the ACF field data using update_field().
+    update_field( 'field_684b598f4cb23', $field_value, $post_id );
 }
 add_action( 'save_post_dlp_document', 'dlp_acf_save_form_field' );
