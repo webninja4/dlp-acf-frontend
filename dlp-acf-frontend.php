@@ -21,8 +21,10 @@ if ( ! defined( 'WPINC' ) ) {
  */
 function dlp_acf_enqueue_scripts() {
     if ( is_singular() && has_shortcode( get_the_content(), 'dlp_submission_form' ) ) {
-        // Enqueue ACF's scripts and styles.
-        acf_enqueue_scripts();
+        // Enqueue ACF's scripts and styles if ACF is available.
+        if ( function_exists( 'acf_enqueue_scripts' ) ) {
+            acf_enqueue_scripts();
+        }
     }
 }
 add_action( 'wp_enqueue_scripts', 'dlp_acf_enqueue_scripts' );
@@ -31,6 +33,11 @@ add_action( 'wp_enqueue_scripts', 'dlp_acf_enqueue_scripts' );
  * Display the 'related_committee' ACF field on the submission form.
  */
 function dlp_acf_display_form_field() {
+    // Ensure ACF is available.
+    if ( ! function_exists( 'acf_get_field' ) || ! function_exists( 'acf_render_field_wrap' ) ) {
+        return;
+    }
+
     // Get the field object for 'related_committee'.
     $field = acf_get_field( 'related_committee' );
 
@@ -61,24 +68,40 @@ add_action( 'dlp_before_submission_form', 'dlp_acf_display_form_field' );
  * @param int $document_id The ID of the new document.
  */
 function dlp_acf_save_form_field( $document_id ) {
+    // Only act on the intended post type.
+    if ( 'dlp_document' !== get_post_type( $document_id ) ) {
+        return;
+    }
+
+    // Guard against autosaves/revisions.
+    if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) || wp_is_post_revision( $document_id ) ) {
+        return;
+    }
+
     // Bail out if there's no ACF data for our field key.
     if ( ! isset( $_POST['acf']['field_684b598f4cb23'] ) ) {
         return;
     }
 
-    // Get the post ID.
-    $post_id = $document_id;
-
-    // Ensure we have a valid post ID.
-    if ( ! $post_id ) {
+    // Verify either the DLP frontend nonce (for frontend submissions) or user capability (for admin/editor saves).
+    $dlp_nonce_is_valid = false;
+    if ( isset( $_POST['dlp_frontend_nonce'] ) ) {
+        $dlp_nonce_is_valid = wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['dlp_frontend_nonce'] ) ), 'dlp_frontend_submission' );
+    }
+    if ( ! $dlp_nonce_is_valid && ! current_user_can( 'edit_post', $document_id ) ) {
         return;
     }
 
-    // Get the value of the 'related_committee' field from the submitted data using its field key.
-    $field_value = $_POST['acf']['field_684b598f4cb23'];
+    // Get and sanitize the 'related_committee' field value. Expect an array of post IDs for a relationship field.
+    $raw_value   = wp_unslash( $_POST['acf']['field_684b598f4cb23'] );
+    $field_value = array_filter( array_map( 'intval', (array) $raw_value ) );
 
-    // Save the ACF field data using update_field().
-    update_field( 'field_684b598f4cb23', $field_value, $post_id );
+    if ( function_exists( 'update_field' ) ) {
+        update_field( 'field_684b598f4cb23', $field_value, $document_id );
+    } else {
+        // Fallback: store as post meta if ACF isn't available for some reason.
+        update_post_meta( $document_id, 'related_committee', $field_value );
+    }
 }
 add_action( 'save_post_dlp_document', 'dlp_acf_save_form_field' );
 
@@ -118,22 +141,35 @@ add_filter( 'gettext', 'dlp_acf_change_form_labels', 20, 3 );
  * singular document page.
  */
 add_filter( 'acf/format_value/name=related_committee', function( $value, $post_id, $field ) {
-    // Check if the current post is the correct CPT and the value is an array.
-    if ( get_post_type( $post_id ) === 'dlp_document' && is_array( $value ) ) {
-        $committee_names = array_map( function( $post_object ) {
-            // Ensure it's a post object with a title.
-            if ( is_object( $post_object ) && isset( $post_object->post_title ) ) {
-                return $post_object->post_title;
-            }
-            return null;
-        }, $value );
-
-        // Remove any null values and return a comma-separated string.
-        return implode( ', ', array_filter( $committee_names ) );
+    // Only format for our CPT.
+    if ( 'dlp_document' !== get_post_type( $post_id ) ) {
+        return $value;
     }
 
-    // Return the original value if it's not a dlp_document or not an array.
-    return $value;
+    if ( ! is_array( $value ) ) {
+        return $value;
+    }
+
+    $committee_names = [];
+    foreach ( $value as $item ) {
+        // Support both post objects and IDs.
+        if ( is_object( $item ) && isset( $item->ID ) ) {
+            $title = get_the_title( (int) $item->ID );
+        } elseif ( is_numeric( $item ) ) {
+            $title = get_the_title( (int) $item );
+        } elseif ( is_object( $item ) && isset( $item->post_title ) ) {
+            $title = (string) $item->post_title;
+        } else {
+            $title = '';
+        }
+
+        $title = sanitize_text_field( (string) $title );
+        if ( $title !== '' ) {
+            $committee_names[] = $title;
+        }
+    }
+
+    return implode( ', ', $committee_names );
 }, 10, 3 );
 
 // Hide classic editor custom field on document singular
